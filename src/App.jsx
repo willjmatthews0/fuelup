@@ -78,7 +78,7 @@ const FOOD_LIBRARY = [
   { name: "Apple + peanut butter",        protein: 8,  category: "Snacks" },
 ];
 
-const FOOD_CATEGORIES = ["Fast Food", "Frozen", "Home Cooked", "Snacks"];
+const FOOD_CATEGORIES = ["Favorites", "Fast Food", "Frozen", "Home Cooked", "Snacks", "My Foods"];
 
 const GROCERY_STAPLES = [
   "Eggs", "Bread", "Peanut butter", "Greek yogurt", "Bananas",
@@ -178,9 +178,13 @@ export default function App() {
   const [proteinLookup, setProteinLookup] = useState(null);
   const [proteinLookupLoading, setProteinLookupLoading] = useState(false);
   const [trendsView, setTrendsView] = useState("week");
+  const [customFoods, setCustomFoods] = useState(() => JSON.parse(localStorage.getItem("custom_foods") || "[]"));
+  const [favorites, setFavorites] = useState(() => JSON.parse(localStorage.getItem("favorites") || "[]"));
 
   useEffect(() => { localStorage.setItem("meal_logs", JSON.stringify(logs)); }, [logs]);
   useEffect(() => { localStorage.setItem("grocery", JSON.stringify(grocery)); }, [grocery]);
+  useEffect(() => { localStorage.setItem("custom_foods", JSON.stringify(customFoods)); }, [customFoods]);
+  useEffect(() => { localStorage.setItem("favorites", JSON.stringify(favorites)); }, [favorites]);
 
   const today = getTodayKey();
   const todayLogs = logs.filter(l => l.date === today);
@@ -211,6 +215,20 @@ export default function App() {
   }
 
   function deleteLog(id) { setLogs(prev => prev.filter(l => l.id !== id)); }
+
+  function toggleFavorite(foodName) {
+    setFavorites(prev => prev.includes(foodName) ? prev.filter(n => n !== foodName) : [...prev, foodName]);
+  }
+
+  function addCustomFood(name, protein) {
+    if (customFoods.some(f => f.name.toLowerCase() === name.toLowerCase())) return;
+    setCustomFoods(prev => [...prev, { name, protein, category: "My Foods" }]);
+  }
+
+  function deleteCustomFood(name) {
+    setCustomFoods(prev => prev.filter(f => f.name !== name));
+    setFavorites(prev => prev.filter(n => n !== name));
+  }
 
   function showToast(msg) {
     setToast(msg);
@@ -273,9 +291,12 @@ export default function App() {
     setProteinLookupLoading(false);
   }
 
-  const filteredFoods = FOOD_LIBRARY.filter(f =>
-    foodSearch ? f.name.toLowerCase().includes(foodSearch.toLowerCase()) : f.category === activeCategory
-  );
+  const allFoods = [...FOOD_LIBRARY, ...customFoods];
+  const filteredFoods = (() => {
+    if (foodSearch) return allFoods.filter(f => f.name.toLowerCase().includes(foodSearch.toLowerCase()));
+    if (activeCategory === "Favorites") return allFoods.filter(f => favorites.includes(f.name));
+    return allFoods.filter(f => f.category === activeCategory);
+  })();
 
   return (
     <div style={{ maxWidth: 480, margin: "0 auto", padding: "0 0 100px", fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", minHeight: "100vh", color: C.text }}>
@@ -394,13 +415,25 @@ export default function App() {
                           </div>
                         )}
                         <div style={{ maxHeight: 180, overflowY: "auto", display: "flex", flexDirection: "column", gap: 3, marginBottom: 14 }}>
-                          {filteredFoods.map(f => (
-                            <div key={f.name} onClick={() => logMeal(id, f.name, f.protein)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "9px 12px", background: C.bg, borderRadius: 10, cursor: "pointer" }}>
-                              <div style={{ fontSize: 13, color: C.text }}>{f.name}</div>
-                              <div style={{ fontSize: 12, color: C.gold, fontWeight: 700, marginLeft: 12, whiteSpace: "nowrap" }}>{f.protein}g</div>
-                            </div>
-                          ))}
-                          {filteredFoods.length === 0 && <div style={{ fontSize: 13, color: C.textDim, padding: "8px 4px" }}>No results — use the lookup below</div>}
+                          {filteredFoods.map(f => {
+                            const isFav = favorites.includes(f.name);
+                            const isCustom = customFoods.some(c => c.name === f.name);
+                            return (
+                              <div key={f.name} style={{ display: "flex", alignItems: "center", padding: "9px 12px", background: C.bg, borderRadius: 10, gap: 8 }}>
+                                <button onClick={(e) => { e.stopPropagation(); toggleFavorite(f.name); }} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 14, padding: 0, lineHeight: 1, color: isFav ? C.gold : C.borderSoft, flexShrink: 0 }}>
+                                  {isFav ? "★" : "☆"}
+                                </button>
+                                <div onClick={() => logMeal(id, f.name, f.protein)} style={{ flex: 1, cursor: "pointer", fontSize: 13, color: C.text }}>{f.name}</div>
+                                <div style={{ fontSize: 12, color: C.gold, fontWeight: 700, whiteSpace: "nowrap" }}>{f.protein}g</div>
+                                {isCustom && (
+                                  <button onClick={(e) => { e.stopPropagation(); deleteCustomFood(f.name); }} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 13, padding: 0, lineHeight: 1, color: C.textDim, flexShrink: 0 }}>×</button>
+                                )}
+                              </div>
+                            );
+                          })}
+                          {filteredFoods.length === 0 && activeCategory === "Favorites" && <div style={{ fontSize: 13, color: C.textDim, padding: "8px 4px" }}>Star foods to add them here</div>}
+                          {filteredFoods.length === 0 && activeCategory === "My Foods" && <div style={{ fontSize: 13, color: C.textDim, padding: "8px 4px" }}>Foods you look up with AI will appear here</div>}
+                          {filteredFoods.length === 0 && activeCategory !== "Favorites" && activeCategory !== "My Foods" && <div style={{ fontSize: 13, color: C.textDim, padding: "8px 4px" }}>No results — use the lookup below</div>}
                         </div>
 
                         <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 12 }}>
@@ -423,7 +456,7 @@ export default function App() {
                                 <div style={{ fontSize: 13, color: C.text, fontWeight: 600 }}>{proteinLookup.food}</div>
                                 <div style={{ fontSize: 12, color: C.gold, marginTop: 2 }}>~{proteinLookup.protein}g protein</div>
                               </div>
-                              <button onClick={() => { logMeal(id, proteinLookup.food, proteinLookup.protein); setProteinLookup(null); }} style={{ background: C.accent, border: "none", borderRadius: 10, padding: "8px 14px", color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
+                              <button onClick={() => { addCustomFood(proteinLookup.food, proteinLookup.protein); logMeal(id, proteinLookup.food, proteinLookup.protein); setProteinLookup(null); }} style={{ background: C.accent, border: "none", borderRadius: 10, padding: "8px 14px", color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
                                 Log it
                               </button>
                             </div>
