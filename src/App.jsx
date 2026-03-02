@@ -153,6 +153,8 @@ export default function App() {
   const [aiResponse, setAiResponse] = useState("");
   const [aiPrompt, setAiPrompt] = useState("");
   const [groceryGenerating, setGroceryGenerating] = useState(false);
+  const [proteinLookup, setProteinLookup] = useState(null);
+  const [proteinLookupLoading, setProteinLookupLoading] = useState(false);
   const [trendsView, setTrendsView] = useState("week");
 
   useEffect(() => { localStorage.setItem("meal_logs", JSON.stringify(logs)); }, [logs]);
@@ -264,6 +266,21 @@ Keep responses short (2-4 sentences), encouraging, and practical. Never shame. F
       setAiResponse("Couldn't reach the API. Check your .env file.");
     }
     setAiLoading(false);
+  }
+
+async function lookupProtein(foodName) {
+    setProteinLookupLoading(true);
+    setProteinLookup(null);
+    try {
+      const system = `You are a nutrition assistant. When given a food, return ONLY a JSON object with two fields: "food" (cleaned up food name as a string) and "protein" (estimated grams of protein as a number). No explanation, no markdown. Example: {"food":"Chipotle chicken burrito","protein":42}`;
+      const raw = await callClaude(system, `Estimate the protein in: ${foodName}`, 100);
+      const clean = raw.replace(/```json|```/g, "").trim();
+      const result = JSON.parse(clean);
+      setProteinLookup(result);
+    } catch {
+      showToast("Couldn't look that up — try again");
+    }
+    setProteinLookupLoading(false);
   }
 
   const filteredFoods = FOOD_LIBRARY.filter(f => {
@@ -402,17 +419,38 @@ Keep responses short (2-4 sentences), encouraging, and practical. Never shame. F
                       )}
                     </div>
                     <div style={{ padding: "0 16px 14px" }}>
-                      <div style={{ fontSize: 11, color: "#555", marginBottom: 6 }}>Not in the list? Add it manually:</div>
-                      <div style={{ display: "flex", gap: 8 }}>
-                        <input
-                          style={{ ...s.input, flex: 2 }}
-                          value={customFood}
-                          onChange={e => setCustomFood(e.target.value)}
-                          placeholder="Food name"
-                        />
-                        <button style={s.addBtn} onClick={() => customFood.trim() && logMeal(id, customFood.trim(), null)}>+</button>
-                      </div>
-                    </div>
+  <div style={{ fontSize: 11, color: "#555", marginBottom: 6 }}>Not in the list? Claude will find the protein:</div>
+  <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+    <input
+      style={{ ...s.input, flex: 2 }}
+      value={customFood}
+      onChange={e => { setCustomFood(e.target.value); setProteinLookup(null); }}
+      onKeyDown={e => e.key === "Enter" && customFood.trim() && lookupProtein(customFood.trim())}
+      placeholder="e.g. Cane's combo, bowl of ramen..."
+    />
+    <button
+      style={{ ...s.addBtn, background: proteinLookupLoading ? "#1a1a24" : "#6d28d9", fontSize: 12, padding: "9px 12px", whiteSpace: "nowrap" }}
+      onClick={() => customFood.trim() && lookupProtein(customFood.trim())}
+      disabled={proteinLookupLoading}
+    >
+      {proteinLookupLoading ? "..." : "Look up"}
+    </button>
+  </div>
+  {proteinLookup && (
+    <div style={{ background: "#1e1b2e", border: "1px solid #a78bfa44", borderRadius: 12, padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+      <div>
+        <div style={{ fontSize: 13, color: "#e0d7ff" }}>{proteinLookup.food}</div>
+        <div style={{ fontSize: 12, color: "#a78bfa" }}>~{proteinLookup.protein}g protein</div>
+      </div>
+      <button
+        style={{ background: "#22c55e", border: "none", borderRadius: 10, padding: "7px 14px", color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer" }}
+        onClick={() => { logMeal(id, proteinLookup.food, proteinLookup.protein); setProteinLookup(null); }}
+      >
+        Log it
+      </button>
+    </div>
+  )}
+</div>
                   </>
                 )}
               </div>
