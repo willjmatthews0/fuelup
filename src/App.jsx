@@ -399,11 +399,10 @@ export default function App() {
                     {isOpen && (
                       <div style={{ background: C.surface, borderRadius: 14, border: `1px solid ${C.border}`, padding: "14px 16px", marginTop: mealLogs.length > 0 ? 0 : 4, minWidth: 0, overflow: "hidden" }}>
                         <input
-                          style={{ width: "100%", boxSizing: "border-box", background: C.bg, border: `1px solid ${C.border}`, borderRadius: 10, padding: "9px 12px", color: C.text, fontSize: 13, outline: "none", marginBottom: 10 }}
+                          style={{ width: "100%", boxSizing: "border-box", background: C.bg, border: `1px solid ${C.border}`, borderRadius: 10, padding: "9px 12px", color: C.text, fontSize: 16, outline: "none", marginBottom: 10 }}
                           value={foodSearch}
                           onChange={e => setFoodSearch(e.target.value)}
                           placeholder="Search foods..."
-                          autoFocus
                         />
                         {!foodSearch && (
                           <div style={{ display: "flex", gap: 6, marginBottom: 10, overflowX: "auto" }}>
@@ -440,7 +439,7 @@ export default function App() {
                           <div style={{ fontSize: 11, color: C.textDim, marginBottom: 8 }}>Not in the list? Claude will find the protein:</div>
                           <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
                             <input
-                              style={{ flex: 1, minWidth: 0, background: C.bg, border: `1px solid ${C.border}`, borderRadius: 10, padding: "9px 12px", color: C.text, fontSize: 13, outline: "none" }}
+                              style={{ flex: 1, minWidth: 0, background: C.bg, border: `1px solid ${C.border}`, borderRadius: 10, padding: "9px 12px", color: C.text, fontSize: 16, outline: "none" }}
                               value={customFood}
                               onChange={e => { setCustomFood(e.target.value); setProteinLookup(null); }}
                               onKeyDown={e => e.key === "Enter" && customFood.trim() && lookupProtein(customFood.trim())}
@@ -578,7 +577,7 @@ export default function App() {
             </button>
             <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
               <input
-                style={{ flex: 1, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: "10px 14px", color: C.text, fontSize: 13, outline: "none" }}
+                style={{ flex: 1, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: "10px 14px", color: C.text, fontSize: 16, outline: "none" }}
                 value={groceryInput}
                 onChange={e => setGroceryInput(e.target.value)}
                 onKeyDown={e => e.key === "Enter" && addGrocery(groceryInput)}
