@@ -1,9 +1,9 @@
 import { useState, useEffect } from "react";
 
 const MEALS = [
-  { id: "breakfast", label: "Breakfast", time: "8–10am", emoji: "🌅" },
-  { id: "lunch",     label: "Lunch",     time: "12–2pm", emoji: "☀️"  },
-  { id: "dinner",    label: "Dinner",    time: "6–8pm",  emoji: "🌙"  },
+  { id: "breakfast", label: "Breakfast", time: "morning" },
+  { id: "lunch",     label: "Lunch",     time: "midday"  },
+  { id: "dinner",    label: "Dinner",    time: "evening"  },
 ];
 
 const ENCOURAGEMENTS = [
@@ -204,7 +204,6 @@ export default function App() {
   function logMeal(mealId, foodName, protein) {
     const entry = { id: Date.now(), meal: mealId, food: foodName, protein: protein || 0, date: today, ts: new Date().toISOString() };
     setLogs(prev => [...prev, entry]);
-    setLogOpen(null);
     setCustomFood("");
     setFoodSearch("");
     setProteinLookup(null);
@@ -331,91 +330,108 @@ export default function App() {
 
         {/* TODAY */}
         {tab === "today" && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            {MEALS.map(({ id, label, time, emoji }) => {
-              const done = status[id];
+          <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+            {MEALS.map(({ id, label, time }, mealIdx) => {
               const mealLogs = todayLogs.filter(l => l.meal === id);
               const mealProtein = mealLogs.reduce((sum, l) => sum + (l.protein || 0), 0);
               const isOpen = logOpen === id;
+              const isLast = mealIdx === MEALS.length - 1;
               return (
-                <div key={id} style={{ background: C.surface, borderRadius: 18, overflow: "hidden", boxShadow: done ? `0 0 0 1.5px ${C.green}55` : C.shadowSm }}>
-                  <div style={{ display: "flex", alignItems: "center", padding: "16px 18px", gap: 14 }}>
-                    <div style={{ fontSize: 26 }}>{emoji}</div>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontWeight: 700, fontSize: 15 }}>{label}</div>
-                      <div style={{ fontSize: 12, color: C.textDim, marginTop: 1 }}>{time}</div>
-                      {mealLogs.length > 0 && (
-                        <div style={{ fontSize: 12, color: C.textSub, marginTop: 4 }}>
-                          {mealLogs.map(l => l.food).join(", ")}
-                          {mealProtein > 0 && <span style={{ color: C.gold, marginLeft: 6, fontWeight: 600 }}>{mealProtein}g</span>}
-                        </div>
-                      )}
-                    </div>
-                    {done ? (
-                      <div style={{ width: 30, height: 30, borderRadius: "50%", background: C.greenSoft, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, color: C.green }}>✓</div>
-                    ) : (
-                      <button onClick={() => { setLogOpen(isOpen ? null : id); setFoodSearch(""); setProteinLookup(null); }} style={{ background: isOpen ? C.borderSoft : C.accent, border: "none", borderRadius: 12, padding: "8px 18px", color: isOpen ? C.textSub : "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
-                        {isOpen ? "Close" : "Log"}
-                      </button>
-                    )}
+                <div key={id} style={{ display: "flex", gap: 16 }}>
+                  {/* Timeline rail */}
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "center", width: 20, flexShrink: 0 }}>
+                    <div style={{ width: 10, height: 10, borderRadius: "50%", background: mealLogs.length > 0 ? C.green : C.border, border: `2px solid ${mealLogs.length > 0 ? C.green : C.borderSoft}`, marginTop: 4, flexShrink: 0 }} />
+                    {!isLast && <div style={{ width: 1.5, flex: 1, background: C.border, marginTop: 4 }} />}
                   </div>
 
-                  {isOpen && (
-                    <div style={{ borderTop: `1px solid ${C.border}`, padding: "16px 18px 18px" }}>
-                      <input
-                        style={{ width: "100%", boxSizing: "border-box", background: C.bg, border: `1px solid ${C.border}`, borderRadius: 12, padding: "10px 14px", color: C.text, fontSize: 13, outline: "none", marginBottom: 12 }}
-                        value={foodSearch}
-                        onChange={e => setFoodSearch(e.target.value)}
-                        placeholder="Search foods..."
-                        autoFocus
-                      />
-                      {!foodSearch && (
-                        <div style={{ display: "flex", gap: 6, marginBottom: 12, overflowX: "auto" }}>
-                          {FOOD_CATEGORIES.map(cat => (
-                            <button key={cat} onClick={() => setActiveCategory(cat)} style={{ padding: "5px 14px", borderRadius: 20, border: `1px solid ${activeCategory === cat ? C.accent : C.border}`, background: activeCategory === cat ? C.accentSoft : "none", color: activeCategory === cat ? C.accent : C.textSub, fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>
-                              {cat}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                      <div style={{ maxHeight: 200, overflowY: "auto", display: "flex", flexDirection: "column", gap: 4, marginBottom: 16 }}>
-                        {filteredFoods.map(f => (
-                          <div key={f.name} onClick={() => logMeal(id, f.name, f.protein)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", background: C.bg, borderRadius: 12, cursor: "pointer" }}>
-                            <div style={{ fontSize: 13, color: C.text }}>{f.name}</div>
-                            <div style={{ fontSize: 12, color: C.gold, fontWeight: 700, marginLeft: 12, whiteSpace: "nowrap" }}>{f.protein}g</div>
+                  {/* Content */}
+                  <div style={{ flex: 1, paddingBottom: isLast ? 0 : 24 }}>
+                    <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 6 }}>
+                      <div>
+                        <span style={{ fontWeight: 700, fontSize: 15, color: C.text }}>{label}</span>
+                        <span style={{ fontSize: 12, color: C.textDim, marginLeft: 8 }}>{time}</span>
+                      </div>
+                      <button onClick={() => { setLogOpen(isOpen ? null : id); setFoodSearch(""); setProteinLookup(null); }} style={{ background: "none", border: "none", color: isOpen ? C.textDim : C.accent, fontWeight: 600, fontSize: 13, cursor: "pointer", padding: "2px 0" }}>
+                        {isOpen ? "done" : "+ add"}
+                      </button>
+                    </div>
+
+                    {/* Logged items */}
+                    {mealLogs.length > 0 && (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: isOpen ? 12 : 0 }}>
+                        {mealLogs.map(l => (
+                          <div key={l.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 12px", background: C.surface, borderRadius: 10, border: `1px solid ${C.border}` }}>
+                            <span style={{ fontSize: 13, color: C.text }}>{l.food}</span>
+                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                              {l.protein > 0 && <span style={{ fontSize: 12, color: C.gold, fontWeight: 600 }}>{l.protein}g</span>}
+                              <button onClick={() => deleteLog(l.id)} style={{ background: "none", border: "none", color: C.textDim, cursor: "pointer", fontSize: 13, padding: 0, lineHeight: 1 }}>×</button>
+                            </div>
                           </div>
                         ))}
-                        {filteredFoods.length === 0 && <div style={{ fontSize: 13, color: C.textDim, padding: "8px 4px" }}>No results — use the lookup below</div>}
-                      </div>
-
-                      <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 14 }}>
-                        <div style={{ fontSize: 11, color: C.textDim, marginBottom: 8 }}>Not in the list? Claude will find the protein:</div>
-                        <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-                          <input
-                            style={{ flex: 1, background: C.bg, border: `1px solid ${C.border}`, borderRadius: 12, padding: "10px 14px", color: C.text, fontSize: 13, outline: "none" }}
-                            value={customFood}
-                            onChange={e => { setCustomFood(e.target.value); setProteinLookup(null); }}
-                            onKeyDown={e => e.key === "Enter" && customFood.trim() && lookupProtein(customFood.trim())}
-                            placeholder="e.g. Cane's combo, bowl of ramen..."
-                          />
-                          <button onClick={() => customFood.trim() && lookupProtein(customFood.trim())} disabled={proteinLookupLoading} style={{ background: proteinLookupLoading ? C.borderSoft : C.accent, border: "none", borderRadius: 12, padding: "10px 16px", color: proteinLookupLoading ? C.textDim : "#fff", fontWeight: 700, fontSize: 13, cursor: proteinLookupLoading ? "not-allowed" : "pointer", whiteSpace: "nowrap" }}>
-                            {proteinLookupLoading ? "..." : "Look up"}
-                          </button>
-                        </div>
-                        {proteinLookup && (
-                          <div style={{ background: C.accentSoft, border: `1px solid ${C.accent}44`, borderRadius: 14, padding: "12px 16px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                            <div>
-                              <div style={{ fontSize: 13, color: C.text, fontWeight: 600 }}>{proteinLookup.food}</div>
-                              <div style={{ fontSize: 12, color: C.gold, marginTop: 2 }}>~{proteinLookup.protein}g protein</div>
-                            </div>
-                            <button onClick={() => { logMeal(id, proteinLookup.food, proteinLookup.protein); setProteinLookup(null); }} style={{ background: C.accent, border: "none", borderRadius: 10, padding: "8px 16px", color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
-                              Log it
-                            </button>
-                          </div>
+                        {mealProtein > 0 && mealLogs.length > 1 && (
+                          <div style={{ fontSize: 11, color: C.textDim, textAlign: "right", paddingRight: 4 }}>{mealProtein}g total</div>
                         )}
                       </div>
-                    </div>
-                  )}
+                    )}
+
+                    {/* Log panel */}
+                    {isOpen && (
+                      <div style={{ background: C.surface, borderRadius: 14, border: `1px solid ${C.border}`, padding: "14px 16px", marginTop: mealLogs.length > 0 ? 0 : 4 }}>
+                        <input
+                          style={{ width: "100%", boxSizing: "border-box", background: C.bg, border: `1px solid ${C.border}`, borderRadius: 10, padding: "9px 12px", color: C.text, fontSize: 13, outline: "none", marginBottom: 10 }}
+                          value={foodSearch}
+                          onChange={e => setFoodSearch(e.target.value)}
+                          placeholder="Search foods..."
+                          autoFocus
+                        />
+                        {!foodSearch && (
+                          <div style={{ display: "flex", gap: 6, marginBottom: 10, overflowX: "auto" }}>
+                            {FOOD_CATEGORIES.map(cat => (
+                              <button key={cat} onClick={() => setActiveCategory(cat)} style={{ padding: "4px 12px", borderRadius: 20, border: `1px solid ${activeCategory === cat ? C.accent : C.border}`, background: activeCategory === cat ? C.accentSoft : "none", color: activeCategory === cat ? C.accent : C.textSub, fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>
+                                {cat}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                        <div style={{ maxHeight: 180, overflowY: "auto", display: "flex", flexDirection: "column", gap: 3, marginBottom: 14 }}>
+                          {filteredFoods.map(f => (
+                            <div key={f.name} onClick={() => logMeal(id, f.name, f.protein)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "9px 12px", background: C.bg, borderRadius: 10, cursor: "pointer" }}>
+                              <div style={{ fontSize: 13, color: C.text }}>{f.name}</div>
+                              <div style={{ fontSize: 12, color: C.gold, fontWeight: 700, marginLeft: 12, whiteSpace: "nowrap" }}>{f.protein}g</div>
+                            </div>
+                          ))}
+                          {filteredFoods.length === 0 && <div style={{ fontSize: 13, color: C.textDim, padding: "8px 4px" }}>No results — use the lookup below</div>}
+                        </div>
+
+                        <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 12 }}>
+                          <div style={{ fontSize: 11, color: C.textDim, marginBottom: 8 }}>Not in the list? Claude will find the protein:</div>
+                          <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+                            <input
+                              style={{ flex: 1, background: C.bg, border: `1px solid ${C.border}`, borderRadius: 10, padding: "9px 12px", color: C.text, fontSize: 13, outline: "none" }}
+                              value={customFood}
+                              onChange={e => { setCustomFood(e.target.value); setProteinLookup(null); }}
+                              onKeyDown={e => e.key === "Enter" && customFood.trim() && lookupProtein(customFood.trim())}
+                              placeholder="e.g. Cane's combo, bowl of ramen..."
+                            />
+                            <button onClick={() => customFood.trim() && lookupProtein(customFood.trim())} disabled={proteinLookupLoading} style={{ background: proteinLookupLoading ? C.borderSoft : C.accent, border: "none", borderRadius: 10, padding: "9px 14px", color: proteinLookupLoading ? C.textDim : "#fff", fontWeight: 700, fontSize: 13, cursor: proteinLookupLoading ? "not-allowed" : "pointer", whiteSpace: "nowrap" }}>
+                              {proteinLookupLoading ? "..." : "Look up"}
+                            </button>
+                          </div>
+                          {proteinLookup && (
+                            <div style={{ background: C.accentSoft, border: `1px solid ${C.accent}44`, borderRadius: 12, padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                              <div>
+                                <div style={{ fontSize: 13, color: C.text, fontWeight: 600 }}>{proteinLookup.food}</div>
+                                <div style={{ fontSize: 12, color: C.gold, marginTop: 2 }}>~{proteinLookup.protein}g protein</div>
+                              </div>
+                              <button onClick={() => { logMeal(id, proteinLookup.food, proteinLookup.protein); setProteinLookup(null); }} style={{ background: C.accent, border: "none", borderRadius: 10, padding: "8px 14px", color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
+                                Log it
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
               );
             })}
