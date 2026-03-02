@@ -299,7 +299,7 @@ export default function App() {
   })();
 
   return (
-    <div style={{ maxWidth: 480, margin: "0 auto", padding: "0 0 100px", fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", minHeight: "100vh", color: C.text }}>
+    <div style={{ maxWidth: 480, margin: "0 auto", padding: "0 0 100px", fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", minHeight: "100vh", color: C.text, overflowX: "hidden" }}>
 
       {/* Header */}
       <div style={{ padding: "48px 20px 24px" }}>
@@ -366,7 +366,7 @@ export default function App() {
                   </div>
 
                   {/* Content */}
-                  <div style={{ flex: 1, paddingBottom: isLast ? 0 : 24 }}>
+                  <div style={{ flex: 1, minWidth: 0, paddingBottom: isLast ? 0 : 24 }}>
                     <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 6 }}>
                       <div>
                         <span style={{ fontWeight: 700, fontSize: 15, color: C.text }}>{label}</span>
@@ -382,7 +382,7 @@ export default function App() {
                       <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: isOpen ? 12 : 0 }}>
                         {mealLogs.map(l => (
                           <div key={l.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 12px", background: C.surface, borderRadius: 10, border: `1px solid ${C.border}` }}>
-                            <span style={{ fontSize: 13, color: C.text }}>{l.food}</span>
+                            <span style={{ fontSize: 13, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0, flex: 1 }}>{l.food}</span>
                             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                               {l.protein > 0 && <span style={{ fontSize: 12, color: C.gold, fontWeight: 600 }}>{l.protein}g</span>}
                               <button onClick={() => deleteLog(l.id)} style={{ background: "none", border: "none", color: C.textDim, cursor: "pointer", fontSize: 13, padding: 0, lineHeight: 1 }}>×</button>
@@ -397,7 +397,7 @@ export default function App() {
 
                     {/* Log panel */}
                     {isOpen && (
-                      <div style={{ background: C.surface, borderRadius: 14, border: `1px solid ${C.border}`, padding: "14px 16px", marginTop: mealLogs.length > 0 ? 0 : 4 }}>
+                      <div style={{ background: C.surface, borderRadius: 14, border: `1px solid ${C.border}`, padding: "14px 16px", marginTop: mealLogs.length > 0 ? 0 : 4, minWidth: 0, overflow: "hidden" }}>
                         <input
                           style={{ width: "100%", boxSizing: "border-box", background: C.bg, border: `1px solid ${C.border}`, borderRadius: 10, padding: "9px 12px", color: C.text, fontSize: 13, outline: "none", marginBottom: 10 }}
                           value={foodSearch}
@@ -423,7 +423,7 @@ export default function App() {
                                 <button onClick={(e) => { e.stopPropagation(); toggleFavorite(f.name); }} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 14, padding: 0, lineHeight: 1, color: isFav ? C.gold : C.borderSoft, flexShrink: 0 }}>
                                   {isFav ? "★" : "☆"}
                                 </button>
-                                <div onClick={() => logMeal(id, f.name, f.protein)} style={{ flex: 1, cursor: "pointer", fontSize: 13, color: C.text }}>{f.name}</div>
+                                <div onClick={() => logMeal(id, f.name, f.protein)} style={{ flex: 1, minWidth: 0, cursor: "pointer", fontSize: 13, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.name}</div>
                                 <div style={{ fontSize: 12, color: C.gold, fontWeight: 700, whiteSpace: "nowrap" }}>{f.protein}g</div>
                                 {isCustom && (
                                   <button onClick={(e) => { e.stopPropagation(); deleteCustomFood(f.name); }} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 13, padding: 0, lineHeight: 1, color: C.textDim, flexShrink: 0 }}>×</button>
@@ -440,7 +440,7 @@ export default function App() {
                           <div style={{ fontSize: 11, color: C.textDim, marginBottom: 8 }}>Not in the list? Claude will find the protein:</div>
                           <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
                             <input
-                              style={{ flex: 1, background: C.bg, border: `1px solid ${C.border}`, borderRadius: 10, padding: "9px 12px", color: C.text, fontSize: 13, outline: "none" }}
+                              style={{ flex: 1, minWidth: 0, background: C.bg, border: `1px solid ${C.border}`, borderRadius: 10, padding: "9px 12px", color: C.text, fontSize: 13, outline: "none" }}
                               value={customFood}
                               onChange={e => { setCustomFood(e.target.value); setProteinLookup(null); }}
                               onKeyDown={e => e.key === "Enter" && customFood.trim() && lookupProtein(customFood.trim())}
