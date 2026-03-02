@@ -99,6 +99,23 @@ const USER_PROFILE = `
 - No dietary restrictions
 `;
 
+const C = {
+  bg:         "#faf6f1",
+  surface:    "#ffffff",
+  border:     "#e8dfd4",
+  borderSoft: "#f0e8dd",
+  accent:     "#c67a4a",
+  accentSoft: "#c67a4a14",
+  green:      "#6a9f5c",
+  greenSoft:  "#6a9f5c14",
+  gold:       "#b8923a",
+  text:       "#3d3229",
+  textSub:    "#8a7d6f",
+  textDim:    "#b5a898",
+  shadow:     "0 2px 16px #00000008",
+  shadowSm:   "0 1px 6px #00000006",
+};
+
 function getTodayKey() {
   return new Date().toISOString().split("T")[0];
 }
@@ -114,9 +131,14 @@ function getEncouragement() {
 }
 
 function getDailyProtein(logs, dateKey) {
-  return logs
-    .filter(l => l.date === dateKey)
-    .reduce((sum, l) => sum + (l.protein || 0), 0);
+  return logs.filter(l => l.date === dateKey).reduce((sum, l) => sum + (l.protein || 0), 0);
+}
+
+function getGreeting() {
+  const h = new Date().getHours();
+  if (h < 11) return "Good morning";
+  if (h < 17) return "Good afternoon";
+  return "Good evening";
 }
 
 async function callClaude(systemPrompt, userMessage, maxTokens = 300) {
@@ -180,27 +202,16 @@ export default function App() {
   const maxProtein = Math.max(...last7.map(d => d.protein), PROTEIN_GOAL);
 
   function logMeal(mealId, foodName, protein) {
-    const entry = {
-      id: Date.now(),
-      meal: mealId,
-      food: foodName,
-      protein: protein || 0,
-      date: today,
-      ts: new Date().toISOString(),
-    };
+    const entry = { id: Date.now(), meal: mealId, food: foodName, protein: protein || 0, date: today, ts: new Date().toISOString() };
     setLogs(prev => [...prev, entry]);
     setLogOpen(null);
     setCustomFood("");
     setFoodSearch("");
-    const msg = protein
-      ? `${getEncouragement()} +${protein}g protein`
-      : getEncouragement();
-    showToast(msg);
+    setProteinLookup(null);
+    showToast(protein ? `${getEncouragement()} +${protein}g protein` : getEncouragement());
   }
 
-  function deleteLog(id) {
-    setLogs(prev => prev.filter(l => l.id !== id));
-  }
+  function deleteLog(id) { setLogs(prev => prev.filter(l => l.id !== id)); }
 
   function showToast(msg) {
     setToast(msg);
@@ -214,38 +225,25 @@ export default function App() {
     setGroceryInput("");
   }
 
-  function toggleGrocery(id) {
-    setGrocery(prev => prev.map(g => g.id === id ? { ...g, done: !g.done } : g));
-  }
-
-  function deleteGrocery(id) {
-    setGrocery(prev => prev.filter(g => g.id !== id));
-  }
+  function toggleGrocery(id) { setGrocery(prev => prev.map(g => g.id === id ? { ...g, done: !g.done } : g)); }
+  function deleteGrocery(id) { setGrocery(prev => prev.filter(g => g.id !== id)); }
 
   async function generateGroceryList() {
     setGroceryGenerating(true);
     try {
-      const system = `You are a grocery list generator for someone with ADHD.
-Return ONLY a valid JSON array of strings. No explanation, no markdown.
-Example: ["Eggs","Bread","Frozen broccoli"]`;
-      const message = `Profile: ${USER_PROFILE}
-Generate 15-20 grocery items for Target. Focus on easy meals, high protein, wall-hit fallbacks. JSON array only.`;
+      const system = `You are a grocery list generator for someone with ADHD. Return ONLY a valid JSON array of strings. No explanation, no markdown. Example: ["Eggs","Bread","Frozen broccoli"]`;
+      const message = `Profile: ${USER_PROFILE}\nGenerate 15-20 grocery items for Target. Focus on easy meals, high protein, wall-hit fallbacks. JSON array only.`;
       const raw = await callClaude(system, message, 500);
-      const clean = raw.replace(/```json|```/g, "").trim();
-      const items = JSON.parse(clean);
+      const items = JSON.parse(raw.replace(/```json|```/g, "").trim());
       let added = 0;
       items.forEach(item => {
-        if (typeof item === "string" && item.trim()) {
-          if (!grocery.find(g => g.name.toLowerCase() === item.toLowerCase())) {
-            setGrocery(prev => [...prev, { id: Date.now() + Math.random(), name: item.trim(), done: false }]);
-            added++;
-          }
+        if (typeof item === "string" && item.trim() && !grocery.find(g => g.name.toLowerCase() === item.toLowerCase())) {
+          setGrocery(prev => [...prev, { id: Date.now() + Math.random(), name: item.trim(), done: false }]);
+          added++;
         }
       });
       showToast(`Added ${added} items to your list`);
-    } catch {
-      showToast("Couldn't generate list — try again");
-    }
+    } catch { showToast("Couldn't generate list — try again"); }
     setGroceryGenerating(false);
   }
 
@@ -257,396 +255,360 @@ Generate 15-20 grocery items for Target. Focus on easy meals, high protein, wall
       const context = todayLogs.length
         ? `Today I've eaten: ${todayLogs.map(l => `${l.meal} (${l.food}${l.protein ? `, ${l.protein}g protein` : ""})`).join(", ")}. Total protein today: ${todayProtein}g of my ${PROTEIN_GOAL}g goal.`
         : "I haven't eaten anything yet today.";
-      const system = `You are a warm, non-judgmental wellness companion for someone with ADHD.
-Profile: ${USER_PROFILE}
-Keep responses short (2-4 sentences), encouraging, and practical. Never shame. Focus on momentum.`;
+      const system = `You are a warm, non-judgmental wellness companion for someone with ADHD.\nProfile: ${USER_PROFILE}\nKeep responses short (2-4 sentences), encouraging, and practical. Never shame. Focus on momentum.`;
       const text = await callClaude(system, `${context} ${aiPrompt}`);
       setAiResponse(text || "Something went wrong, try again.");
-    } catch {
-      setAiResponse("Couldn't reach the API. Check your .env file.");
-    }
+    } catch { setAiResponse("Couldn't reach the API. Check your .env file."); }
     setAiLoading(false);
   }
 
-async function lookupProtein(foodName) {
+  async function lookupProtein(foodName) {
     setProteinLookupLoading(true);
     setProteinLookup(null);
     try {
       const system = `You are a nutrition assistant. When given a food, return ONLY a JSON object with two fields: "food" (cleaned up food name as a string) and "protein" (estimated grams of protein as a number). No explanation, no markdown. Example: {"food":"Chipotle chicken burrito","protein":42}`;
       const raw = await callClaude(system, `Estimate the protein in: ${foodName}`, 100);
-      const clean = raw.replace(/```json|```/g, "").trim();
-      const result = JSON.parse(clean);
+      const result = JSON.parse(raw.replace(/```json|```/g, "").trim());
       setProteinLookup(result);
-    } catch {
-      showToast("Couldn't look that up — try again");
-    }
+    } catch { showToast("Couldn't look that up — try again"); }
     setProteinLookupLoading(false);
   }
 
-  const filteredFoods = FOOD_LIBRARY.filter(f => {
-    const matchesCategory = f.category === activeCategory;
-    const matchesSearch = foodSearch
-      ? f.name.toLowerCase().includes(foodSearch.toLowerCase())
-      : true;
-    return foodSearch ? matchesSearch : matchesCategory;
-  });
-
-  const s = {
-    app: { maxWidth: 480, margin: "0 auto", padding: "16px 16px 100px", fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", background: "#0f0f13", minHeight: "100vh", color: "#f0f0f0" },
-    header: { textAlign: "center", padding: "20px 0 16px" },
-    title: { fontSize: 28, fontWeight: 800, background: "linear-gradient(135deg, #a78bfa, #60a5fa)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" },
-    subtitle: { fontSize: 13, color: "#888", marginTop: 4 },
-    tabs: { display: "flex", gap: 6, marginBottom: 20 },
-    tab: (active) => ({ flex: 1, padding: "9px 0", borderRadius: 10, border: "none", cursor: "pointer", fontSize: 12, fontWeight: 600, background: active ? "linear-gradient(135deg, #a78bfa, #60a5fa)" : "#1a1a24", color: active ? "#fff" : "#666" }),
-    card: (done) => ({ background: done ? "#0d1f15" : "#16161f", border: `1px solid ${done ? "#22c55e33" : "#ffffff0d"}`, borderRadius: 16, overflow: "hidden", marginBottom: 10 }),
-    cardRow: { display: "flex", alignItems: "center", padding: "14px 16px", gap: 12 },
-    logBtn: { background: "linear-gradient(135deg, #a78bfa, #60a5fa)", border: "none", borderRadius: 10, padding: "7px 14px", color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer", whiteSpace: "nowrap" },
-    quickGrid: { display: "flex", flexWrap: "wrap", gap: 6, padding: "0 16px 12px" },
-    quickBtn: { background: "#0f0f13", border: "1px solid #2a2a35", borderRadius: 20, padding: "6px 13px", color: "#ccc", fontSize: 12, cursor: "pointer" },
-    inputRow: { display: "flex", gap: 8, marginBottom: 14 },
-    input: { flex: 1, background: "#0f0f13", border: "1px solid #2a2a35", borderRadius: 10, padding: "9px 12px", color: "#fff", fontSize: 13, outline: "none" },
-    addBtn: { background: "#22c55e", border: "none", borderRadius: 10, padding: "9px 16px", color: "#fff", fontWeight: 700, fontSize: 16, cursor: "pointer" },
-    generateBtn: { width: "100%", padding: "13px", borderRadius: 12, border: "none", cursor: groceryGenerating ? "not-allowed" : "pointer", fontSize: 14, fontWeight: 700, background: groceryGenerating ? "#1a1a24" : "linear-gradient(135deg, #a78bfa, #60a5fa)", color: groceryGenerating ? "#555" : "#fff", marginBottom: 16 },
-    toast: { position: "fixed", bottom: 90, left: "50%", transform: "translateX(-50%)", background: "#1e1b2e", border: "1px solid #a78bfa44", borderRadius: 14, padding: "12px 20px", fontSize: 14, color: "#c4b5fd", whiteSpace: "nowrap", zIndex: 100, boxShadow: "0 4px 24px #0008" },
-    section: { marginBottom: 20 },
-    sectionLabel: { fontSize: 12, color: "#a78bfa", fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", marginBottom: 10 },
-    groceryItem: { display: "flex", alignItems: "center", gap: 10, padding: "11px 14px", background: "#16161f", border: "1px solid #ffffff0d", borderRadius: 12, marginBottom: 6 },
-    aiBox: { background: "#16161f", border: "1px solid #a78bfa33", borderRadius: 16, padding: 16, marginTop: 16 },
-    aiText: { fontSize: 14, color: "#e0d7ff", lineHeight: 1.6 },
-    historyDay: { marginBottom: 20 },
-    historyDate: { fontSize: 12, color: "#a78bfa", fontWeight: 700, marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.5 },
-    historyEntry: { display: "flex", alignItems: "center", gap: 10, padding: "9px 12px", background: "#16161f", borderRadius: 10, marginBottom: 4 },
-    proteinBar: { height: 6, borderRadius: 3, background: "#1a1a24", overflow: "hidden", marginTop: 10, marginBottom: 4 },
-    proteinFill: (pct) => ({ height: "100%", width: `${pct}%`, borderRadius: 3, background: pct >= 100 ? "#22c55e" : "linear-gradient(90deg, #a78bfa, #60a5fa)", transition: "width 0.4s ease" }),
-    categoryBtn: (active) => ({ padding: "6px 14px", borderRadius: 20, border: "none", cursor: "pointer", fontSize: 12, fontWeight: 600, background: active ? "#a78bfa" : "#1a1a24", color: active ? "#fff" : "#666" }),
-  };
+  const filteredFoods = FOOD_LIBRARY.filter(f =>
+    foodSearch ? f.name.toLowerCase().includes(foodSearch.toLowerCase()) : f.category === activeCategory
+  );
 
   return (
-    <div style={s.app}>
+    <div style={{ maxWidth: 480, margin: "0 auto", padding: "0 0 100px", fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", minHeight: "100vh", color: C.text }}>
 
-      <div style={s.header}>
-        <div style={s.title}>fuelup</div>
-        <div style={s.subtitle}>
-          {mealsToday === 0 && "Let's get your first meal in 🌱"}
-          {mealsToday === 1 && "Nice start. Keep the momentum going ✨"}
-          {mealsToday === 2 && "Two meals down. Almost there 🔥"}
-          {mealsToday === 3 && "Three meals today. That's everything. 🎉"}
+      {/* Header */}
+      <div style={{ padding: "48px 20px 24px" }}>
+        <div style={{ fontSize: 13, color: C.textSub, fontWeight: 500, marginBottom: 4 }}>{getGreeting()} 👋</div>
+        <div style={{ fontSize: 32, fontWeight: 800, letterSpacing: -1, color: C.text }}>fuelup</div>
+        <div style={{ fontSize: 14, color: C.textSub, marginTop: 4 }}>
+          {mealsToday === 0 && "Let's get your first meal in today"}
+          {mealsToday === 1 && "Good start — keep the momentum going"}
+          {mealsToday === 2 && "Two meals down, one to go"}
+          {mealsToday === 3 && "Three meals today. That's everything ✦"}
         </div>
-        <div style={{ background: "#16161f", border: "1px solid #ffffff0d", borderRadius: 14, padding: "12px 16px", marginTop: 12, textAlign: "left" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <div style={{ fontSize: 13, color: "#888" }}>Protein today</div>
-            <div style={{ fontSize: 13, fontWeight: 700, color: proteinPct >= 100 ? "#22c55e" : "#a78bfa" }}>
-              {todayProtein}g <span style={{ color: "#444", fontWeight: 400 }}>/ {PROTEIN_GOAL}g</span>
+
+        {/* Protein card */}
+        <div style={{ background: C.surface, borderRadius: 18, padding: "16px 18px", marginTop: 20, boxShadow: C.shadow }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+            <div>
+              <div style={{ fontSize: 12, color: C.textSub, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>Protein today</div>
+              <div style={{ fontSize: 28, fontWeight: 800, color: C.text, marginTop: 2, letterSpacing: -1 }}>
+                {todayProtein}g
+                <span style={{ fontSize: 14, fontWeight: 500, color: C.textDim, marginLeft: 4 }}>/ {PROTEIN_GOAL}g</span>
+              </div>
+            </div>
+            <div style={{ textAlign: "right" }}>
+              <div style={{ fontSize: 12, color: proteinPct >= 100 ? C.green : C.gold, fontWeight: 700 }}>
+                {proteinPct >= 100 ? "Goal hit! ✦" : `${PROTEIN_GOAL - todayProtein}g to go`}
+              </div>
+              <div style={{ fontSize: 11, color: C.textDim, marginTop: 2 }}>{Math.round(proteinPct)}%</div>
             </div>
           </div>
-          <div style={s.proteinBar}>
-            <div style={s.proteinFill(proteinPct)} />
-          </div>
-          <div style={{ fontSize: 11, color: "#555" }}>
-            {proteinPct >= 100 ? "Goal hit! 🎉" : `${PROTEIN_GOAL - todayProtein}g to go`}
+          <div style={{ height: 6, borderRadius: 3, background: C.borderSoft, overflow: "hidden", marginTop: 14 }}>
+            <div style={{ height: "100%", width: `${proteinPct}%`, borderRadius: 3, background: proteinPct >= 100 ? C.green : C.gold, transition: "width 0.5s ease" }} />
           </div>
         </div>
       </div>
 
-      <div style={s.tabs}>
+      {/* Tabs */}
+      <div style={{ display: "flex", padding: "0 20px", borderBottom: `1px solid ${C.border}`, marginBottom: 24 }}>
         {[["today","Today"],["trends","Trends"],["grocery","Groceries"],["ask","Ask AI"]].map(([id, label]) => (
-          <button key={id} style={s.tab(tab === id)} onClick={() => setTab(id)}>{label}</button>
+          <button key={id} onClick={() => setTab(id)} style={{
+            flex: 1, padding: "12px 0", border: "none", cursor: "pointer", fontSize: 13, fontWeight: 600,
+            background: "none", color: tab === id ? C.accent : C.textDim,
+            borderBottom: `2px solid ${tab === id ? C.accent : "transparent"}`,
+            transition: "all 0.15s",
+          }}>{label}</button>
         ))}
       </div>
 
-      {tab === "today" && (
-        <div>
-          {MEALS.map(({ id, label, time, emoji }) => {
-            const done = status[id];
-            const mealLogs = todayLogs.filter(l => l.meal === id);
-            const mealProtein = mealLogs.reduce((sum, l) => sum + (l.protein || 0), 0);
-            const isOpen = logOpen === id;
-            return (
-              <div key={id} style={s.card(done)}>
-                <div style={s.cardRow}>
-                  <div style={{ fontSize: 24 }}>{emoji}</div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: 600, fontSize: 15 }}>{label}</div>
-                    <div style={{ fontSize: 12, color: "#666" }}>{time}</div>
-                    {mealLogs.length > 0 && (
-                      <div style={{ fontSize: 12, color: "#86efac", marginTop: 3 }}>
-                        {mealLogs.map(l => l.food).join(", ")}
-                        {mealProtein > 0 && <span style={{ color: "#a78bfa", marginLeft: 6 }}>{mealProtein}g protein</span>}
-                      </div>
+      <div style={{ padding: "0 20px" }}>
+
+        {/* TODAY */}
+        {tab === "today" && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {MEALS.map(({ id, label, time, emoji }) => {
+              const done = status[id];
+              const mealLogs = todayLogs.filter(l => l.meal === id);
+              const mealProtein = mealLogs.reduce((sum, l) => sum + (l.protein || 0), 0);
+              const isOpen = logOpen === id;
+              return (
+                <div key={id} style={{ background: C.surface, borderRadius: 18, overflow: "hidden", boxShadow: done ? `0 0 0 1.5px ${C.green}55` : C.shadowSm }}>
+                  <div style={{ display: "flex", alignItems: "center", padding: "16px 18px", gap: 14 }}>
+                    <div style={{ fontSize: 26 }}>{emoji}</div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontWeight: 700, fontSize: 15 }}>{label}</div>
+                      <div style={{ fontSize: 12, color: C.textDim, marginTop: 1 }}>{time}</div>
+                      {mealLogs.length > 0 && (
+                        <div style={{ fontSize: 12, color: C.textSub, marginTop: 4 }}>
+                          {mealLogs.map(l => l.food).join(", ")}
+                          {mealProtein > 0 && <span style={{ color: C.gold, marginLeft: 6, fontWeight: 600 }}>{mealProtein}g</span>}
+                        </div>
+                      )}
+                    </div>
+                    {done ? (
+                      <div style={{ width: 30, height: 30, borderRadius: "50%", background: C.greenSoft, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, color: C.green }}>✓</div>
+                    ) : (
+                      <button onClick={() => { setLogOpen(isOpen ? null : id); setFoodSearch(""); setProteinLookup(null); }} style={{ background: isOpen ? C.borderSoft : C.accent, border: "none", borderRadius: 12, padding: "8px 18px", color: isOpen ? C.textSub : "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
+                        {isOpen ? "Close" : "Log"}
+                      </button>
                     )}
                   </div>
-                  {done ? (
-                    <div style={{ fontSize: 20 }}>✅</div>
-                  ) : (
-                    <button style={s.logBtn} onClick={() => { setLogOpen(isOpen ? null : id); setFoodSearch(""); }}>
-                      {isOpen ? "Close ▲" : "Log ▼"}
-                    </button>
-                  )}
-                </div>
-                {isOpen && (
-                  <>
-                    <div style={{ padding: "0 16px 10px" }}>
+
+                  {isOpen && (
+                    <div style={{ borderTop: `1px solid ${C.border}`, padding: "16px 18px 18px" }}>
                       <input
-                        style={{ ...s.input, width: "100%", boxSizing: "border-box" }}
+                        style={{ width: "100%", boxSizing: "border-box", background: C.bg, border: `1px solid ${C.border}`, borderRadius: 12, padding: "10px 14px", color: C.text, fontSize: 13, outline: "none", marginBottom: 12 }}
                         value={foodSearch}
                         onChange={e => setFoodSearch(e.target.value)}
                         placeholder="Search foods..."
                         autoFocus
                       />
-                    </div>
-                    {!foodSearch && (
-                      <div style={{ display: "flex", gap: 6, padding: "0 16px 10px", overflowX: "auto" }}>
-                        {FOOD_CATEGORIES.map(cat => (
-                          <button key={cat} style={s.categoryBtn(activeCategory === cat)} onClick={() => setActiveCategory(cat)}>
-                            {cat}
+                      {!foodSearch && (
+                        <div style={{ display: "flex", gap: 6, marginBottom: 12, overflowX: "auto" }}>
+                          {FOOD_CATEGORIES.map(cat => (
+                            <button key={cat} onClick={() => setActiveCategory(cat)} style={{ padding: "5px 14px", borderRadius: 20, border: `1px solid ${activeCategory === cat ? C.accent : C.border}`, background: activeCategory === cat ? C.accentSoft : "none", color: activeCategory === cat ? C.accent : C.textSub, fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>
+                              {cat}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      <div style={{ maxHeight: 200, overflowY: "auto", display: "flex", flexDirection: "column", gap: 4, marginBottom: 16 }}>
+                        {filteredFoods.map(f => (
+                          <div key={f.name} onClick={() => logMeal(id, f.name, f.protein)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", background: C.bg, borderRadius: 12, cursor: "pointer" }}>
+                            <div style={{ fontSize: 13, color: C.text }}>{f.name}</div>
+                            <div style={{ fontSize: 12, color: C.gold, fontWeight: 700, marginLeft: 12, whiteSpace: "nowrap" }}>{f.protein}g</div>
+                          </div>
+                        ))}
+                        {filteredFoods.length === 0 && <div style={{ fontSize: 13, color: C.textDim, padding: "8px 4px" }}>No results — use the lookup below</div>}
+                      </div>
+
+                      <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 14 }}>
+                        <div style={{ fontSize: 11, color: C.textDim, marginBottom: 8 }}>Not in the list? Claude will find the protein:</div>
+                        <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+                          <input
+                            style={{ flex: 1, background: C.bg, border: `1px solid ${C.border}`, borderRadius: 12, padding: "10px 14px", color: C.text, fontSize: 13, outline: "none" }}
+                            value={customFood}
+                            onChange={e => { setCustomFood(e.target.value); setProteinLookup(null); }}
+                            onKeyDown={e => e.key === "Enter" && customFood.trim() && lookupProtein(customFood.trim())}
+                            placeholder="e.g. Cane's combo, bowl of ramen..."
+                          />
+                          <button onClick={() => customFood.trim() && lookupProtein(customFood.trim())} disabled={proteinLookupLoading} style={{ background: proteinLookupLoading ? C.borderSoft : C.accent, border: "none", borderRadius: 12, padding: "10px 16px", color: proteinLookupLoading ? C.textDim : "#fff", fontWeight: 700, fontSize: 13, cursor: proteinLookupLoading ? "not-allowed" : "pointer", whiteSpace: "nowrap" }}>
+                            {proteinLookupLoading ? "..." : "Look up"}
                           </button>
+                        </div>
+                        {proteinLookup && (
+                          <div style={{ background: C.accentSoft, border: `1px solid ${C.accent}44`, borderRadius: 14, padding: "12px 16px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                            <div>
+                              <div style={{ fontSize: 13, color: C.text, fontWeight: 600 }}>{proteinLookup.food}</div>
+                              <div style={{ fontSize: 12, color: C.gold, marginTop: 2 }}>~{proteinLookup.protein}g protein</div>
+                            </div>
+                            <button onClick={() => { logMeal(id, proteinLookup.food, proteinLookup.protein); setProteinLookup(null); }} style={{ background: C.accent, border: "none", borderRadius: 10, padding: "8px 16px", color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
+                              Log it
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* TRENDS */}
+        {tab === "trends" && (
+          <div>
+            <div style={{ display: "flex", gap: 6, marginBottom: 20 }}>
+              {[["week","Weekly Graph"],["log","Meal Log"]].map(([id, label]) => (
+                <button key={id} onClick={() => setTrendsView(id)} style={{ padding: "7px 16px", borderRadius: 20, border: `1px solid ${trendsView === id ? C.accent : C.border}`, background: trendsView === id ? C.accentSoft : "none", color: trendsView === id ? C.accent : C.textSub, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            {trendsView === "week" && (
+              <>
+                <div style={{ background: C.surface, borderRadius: 18, padding: "20px 18px", boxShadow: C.shadowSm, marginBottom: 12 }}>
+                  <div style={{ fontSize: 12, color: C.textSub, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 20 }}>Protein — last 7 days</div>
+                  <div style={{ display: "flex", alignItems: "flex-end", gap: 6, height: 130, marginBottom: 10 }}>
+                    {last7.map(({ dateKey, protein, label }) => {
+                      const isToday = dateKey === today;
+                      const barH = maxProtein > 0 ? (protein / maxProtein) * 110 : 0;
+                      const hitGoal = protein >= PROTEIN_GOAL;
+                      return (
+                        <div key={dateKey} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+                          {protein > 0 && <div style={{ fontSize: 9, color: hitGoal ? C.green : C.gold, fontWeight: 700 }}>{protein}g</div>}
+                          <div style={{ width: "100%", height: Math.max(barH, protein > 0 ? 3 : 0), background: hitGoal ? C.green : isToday ? C.accent : C.border, borderRadius: "4px 4px 0 0", transition: "height 0.4s ease" }} />
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div style={{ display: "flex" }}>
+                    {last7.map(({ dateKey, label }) => (
+                      <div key={dateKey} style={{ flex: 1, textAlign: "center", fontSize: 10, color: dateKey === today ? C.accent : C.textDim, fontWeight: dateKey === today ? 700 : 400 }}>{label}</div>
+                    ))}
+                  </div>
+                  <div style={{ marginTop: 16, display: "flex", gap: 14, fontSize: 11, color: C.textDim }}>
+                    <span><span style={{ color: C.green }}>■</span> Goal hit</span>
+                    <span><span style={{ color: C.accent }}>■</span> Today</span>
+                    <span style={{ marginLeft: "auto" }}>Goal: {PROTEIN_GOAL}g</span>
+                  </div>
+                </div>
+
+                <div style={{ background: C.surface, borderRadius: 18, padding: 18, boxShadow: C.shadowSm }}>
+                  <div style={{ fontSize: 12, color: C.textSub, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 16 }}>This week</div>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    {[
+                      { value: last7.filter(d => d.protein > 0).length, label: "days logged", color: C.accent },
+                      { value: `${Math.round(last7.reduce((s, d) => s + d.protein, 0) / Math.max(last7.filter(d => d.protein > 0).length, 1))}g`, label: "avg protein", color: C.gold },
+                      { value: last7.filter(d => d.protein >= PROTEIN_GOAL).length, label: "goals hit", color: C.green },
+                    ].map(({ value, label, color }) => (
+                      <div key={label} style={{ flex: 1, textAlign: "center", background: C.bg, borderRadius: 14, padding: "14px 8px" }}>
+                        <div style={{ fontSize: 24, fontWeight: 800, color, letterSpacing: -1 }}>{value}</div>
+                        <div style={{ fontSize: 11, color: C.textDim, marginTop: 4 }}>{label}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
+
+            {trendsView === "log" && (
+              <div>
+                {logs.length === 0 ? (
+                  <div style={{ color: C.textDim, fontSize: 14, textAlign: "center", marginTop: 60 }}>No meals logged yet. Start with today!</div>
+                ) : (
+                  [...new Set(logs.map(l => l.date))].sort().reverse().slice(0, 14).map(date => {
+                    const dayLogs = logs.filter(l => l.date === date);
+                    const dayProtein = getDailyProtein(logs, date);
+                    const isToday = date === today;
+                    return (
+                      <div key={date} style={{ marginBottom: 20 }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                          <div style={{ fontSize: 12, color: C.accent, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5 }}>
+                            {isToday ? "Today" : new Date(date + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
+                            <span style={{ color: C.textDim, fontWeight: 400, marginLeft: 8, textTransform: "none" }}>{dayLogs.length} meal{dayLogs.length !== 1 ? "s" : ""}</span>
+                          </div>
+                          {dayProtein > 0 && (
+                            <div style={{ fontSize: 12, color: dayProtein >= PROTEIN_GOAL ? C.green : C.gold, fontWeight: 700 }}>
+                              {dayProtein}g {dayProtein >= PROTEIN_GOAL ? "✓" : ""}
+                            </div>
+                          )}
+                        </div>
+                        {dayLogs.map(l => (
+                          <div key={l.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 14px", background: C.surface, borderRadius: 14, marginBottom: 5, boxShadow: C.shadowSm }}>
+                            <div style={{ fontSize: 16 }}>{l.meal === "breakfast" ? "🌅" : l.meal === "lunch" ? "☀️" : "🌙"}</div>
+                            <div style={{ flex: 1 }}>
+                              <div style={{ fontSize: 13, color: C.text }}>{l.food}</div>
+                              <div style={{ fontSize: 11, color: C.textDim, marginTop: 1 }}>{l.meal}{l.protein ? ` · ${l.protein}g protein` : ""}</div>
+                            </div>
+                            <button onClick={() => deleteLog(l.id)} style={{ background: "none", border: "none", color: C.textDim, cursor: "pointer", fontSize: 16 }}>✕</button>
+                          </div>
                         ))}
                       </div>
-                    )}
-                    <div style={{ maxHeight: 220, overflowY: "auto", padding: "0 16px 10px" }}>
-                      {filteredFoods.map(f => (
-                        <div
-                          key={f.name}
-                          onClick={() => logMeal(id, f.name, f.protein)}
-                          style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "9px 12px", background: "#0f0f13", border: "1px solid #2a2a35", borderRadius: 10, marginBottom: 5, cursor: "pointer" }}
-                        >
-                          <div style={{ fontSize: 13, color: "#ccc" }}>{f.name}</div>
-                          <div style={{ fontSize: 12, color: "#a78bfa", fontWeight: 600, whiteSpace: "nowrap", marginLeft: 8 }}>{f.protein}g</div>
-                        </div>
-                      ))}
-                      {filteredFoods.length === 0 && (
-                        <div style={{ fontSize: 13, color: "#555", padding: "8px 0" }}>No results — use custom below</div>
-                      )}
-                    </div>
-                    <div style={{ padding: "0 16px 14px" }}>
-  <div style={{ fontSize: 11, color: "#555", marginBottom: 6 }}>Not in the list? Claude will find the protein:</div>
-  <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-    <input
-      style={{ ...s.input, flex: 2 }}
-      value={customFood}
-      onChange={e => { setCustomFood(e.target.value); setProteinLookup(null); }}
-      onKeyDown={e => e.key === "Enter" && customFood.trim() && lookupProtein(customFood.trim())}
-      placeholder="e.g. Cane's combo, bowl of ramen..."
-    />
-    <button
-      style={{ ...s.addBtn, background: proteinLookupLoading ? "#1a1a24" : "#6d28d9", fontSize: 12, padding: "9px 12px", whiteSpace: "nowrap" }}
-      onClick={() => customFood.trim() && lookupProtein(customFood.trim())}
-      disabled={proteinLookupLoading}
-    >
-      {proteinLookupLoading ? "..." : "Look up"}
-    </button>
-  </div>
-  {proteinLookup && (
-    <div style={{ background: "#1e1b2e", border: "1px solid #a78bfa44", borderRadius: 12, padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-      <div>
-        <div style={{ fontSize: 13, color: "#e0d7ff" }}>{proteinLookup.food}</div>
-        <div style={{ fontSize: 12, color: "#a78bfa" }}>~{proteinLookup.protein}g protein</div>
-      </div>
-      <button
-        style={{ background: "#22c55e", border: "none", borderRadius: 10, padding: "7px 14px", color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer" }}
-        onClick={() => { logMeal(id, proteinLookup.food, proteinLookup.protein); setProteinLookup(null); }}
-      >
-        Log it
-      </button>
-    </div>
-  )}
-</div>
-                  </>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {tab === "trends" && (
-        <div>
-          <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
-            {[["week","Weekly Graph"],["log","Meal Log"]].map(([id, label]) => (
-              <button key={id} style={s.categoryBtn(trendsView === id)} onClick={() => setTrendsView(id)}>{label}</button>
-            ))}
-          </div>
-          {trendsView === "week" && (
-            <>
-              <div style={s.sectionLabel}>Protein — last 7 days</div>
-              <div style={{ background: "#16161f", border: "1px solid #ffffff0d", borderRadius: 16, padding: "20px 16px 16px" }}>
-                <div style={{ display: "flex", alignItems: "flex-end", gap: 6, height: 140, marginBottom: 10 }}>
-                  {last7.map(({ dateKey, protein, label }) => {
-                    const isToday = dateKey === today;
-                    const barHeight = maxProtein > 0 ? (protein / maxProtein) * 120 : 0;
-                    const hitGoal = protein >= PROTEIN_GOAL;
-                    return (
-                      <div key={dateKey} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
-                        {protein > 0 && (
-                          <div style={{ fontSize: 10, color: hitGoal ? "#22c55e" : "#a78bfa" }}>{protein}g</div>
-                        )}
-                        <div style={{ width: "100%", height: Math.max(barHeight, protein > 0 ? 4 : 0), background: hitGoal ? "#22c55e" : isToday ? "linear-gradient(180deg, #a78bfa, #60a5fa)" : "#2a2a35", borderRadius: "4px 4px 0 0", transition: "height 0.3s ease" }} />
-                      </div>
                     );
-                  })}
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between", padding: "0 2px" }}>
-                  {last7.map(({ dateKey, label }) => (
-                    <div key={dateKey} style={{ flex: 1, textAlign: "center", fontSize: 10, color: dateKey === today ? "#a78bfa" : "#555" }}>{label}</div>
-                  ))}
-                </div>
-                <div style={{ marginTop: 14, display: "flex", gap: 16, fontSize: 12, color: "#666" }}>
-                  <span><span style={{ color: "#22c55e" }}>■</span> Goal hit</span>
-                  <span><span style={{ color: "#a78bfa" }}>■</span> Today</span>
-                  <span><span style={{ color: "#2a2a35" }}>■</span> Past days</span>
-                  <span style={{ marginLeft: "auto" }}>Goal: {PROTEIN_GOAL}g</span>
-                </div>
-              </div>
-              <div style={{ marginTop: 16, background: "#16161f", border: "1px solid #ffffff0d", borderRadius: 16, padding: 16 }}>
-                <div style={s.sectionLabel}>This week</div>
-                <div style={{ display: "flex", gap: 12 }}>
-                  <div style={{ flex: 1, textAlign: "center" }}>
-                    <div style={{ fontSize: 22, fontWeight: 700, color: "#a78bfa" }}>
-                      {last7.filter(d => d.protein > 0).length}
-                    </div>
-                    <div style={{ fontSize: 12, color: "#555" }}>days logged</div>
-                  </div>
-                  <div style={{ flex: 1, textAlign: "center" }}>
-                    <div style={{ fontSize: 22, fontWeight: 700, color: "#60a5fa" }}>
-                      {Math.round(last7.reduce((sum, d) => sum + d.protein, 0) / Math.max(last7.filter(d => d.protein > 0).length, 1))}g
-                    </div>
-                    <div style={{ fontSize: 12, color: "#555" }}>avg protein</div>
-                  </div>
-                  <div style={{ flex: 1, textAlign: "center" }}>
-                    <div style={{ fontSize: 22, fontWeight: 700, color: "#22c55e" }}>
-                      {last7.filter(d => d.protein >= PROTEIN_GOAL).length}
-                    </div>
-                    <div style={{ fontSize: 12, color: "#555" }}>goals hit</div>
-                  </div>
-                </div>
-              </div>
-            </>
-          )}
-          {trendsView === "log" && (
-            <div>
-              {logs.length === 0 ? (
-                <div style={{ color: "#555", fontSize: 14, textAlign: "center", marginTop: 40 }}>No meals logged yet. Start with today!</div>
-              ) : (
-                [...new Set(logs.map(l => l.date))].sort().reverse().slice(0, 14).map(date => {
-                  const dayLogs = logs.filter(l => l.date === date);
-                  const dayProtein = getDailyProtein(logs, date);
-                  const isToday = date === today;
-                  return (
-                    <div key={date} style={s.historyDay}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-                        <div style={s.historyDate}>
-                          {isToday ? "Today" : new Date(date + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
-                          <span style={{ color: "#444", fontWeight: 400, marginLeft: 8 }}>{dayLogs.length} meal{dayLogs.length !== 1 ? "s" : ""}</span>
-                        </div>
-                        {dayProtein > 0 && (
-                          <div style={{ fontSize: 12, color: dayProtein >= PROTEIN_GOAL ? "#22c55e" : "#a78bfa", fontWeight: 600 }}>
-                            {dayProtein}g {dayProtein >= PROTEIN_GOAL ? "✓" : ""}
-                          </div>
-                        )}
-                      </div>
-                      {dayLogs.map(l => (
-                        <div key={l.id} style={s.historyEntry}>
-                          <div style={{ fontSize: 16 }}>
-                            {l.meal === "breakfast" ? "🌅" : l.meal === "lunch" ? "☀️" : "🌙"}
-                          </div>
-                          <div style={{ flex: 1 }}>
-                            <div style={{ fontSize: 13, color: "#ccc" }}>{l.food}</div>
-                            <div style={{ fontSize: 11, color: "#555" }}>{l.meal}{l.protein ? ` · ${l.protein}g protein` : ""}</div>
-                          </div>
-                          <button onClick={() => deleteLog(l.id)} style={{ background: "none", border: "none", color: "#333", cursor: "pointer", fontSize: 16 }}>✕</button>
-                        </div>
-                      ))}
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          )}
-        </div>
-      )}
-
-      {tab === "grocery" && (
-        <div>
-          <button style={s.generateBtn} onClick={generateGroceryList} disabled={groceryGenerating}>
-            {groceryGenerating ? "Generating your list..." : "✨ Generate my grocery list"}
-          </button>
-          <div style={s.inputRow}>
-            <input
-              style={s.input}
-              value={groceryInput}
-              onChange={e => setGroceryInput(e.target.value)}
-              onKeyDown={e => e.key === "Enter" && addGrocery(groceryInput)}
-              placeholder="Add an item manually..."
-            />
-            <button style={s.addBtn} onClick={() => addGrocery(groceryInput)}>+</button>
-          </div>
-          <div style={s.section}>
-            <div style={s.sectionLabel}>Quick add staples</div>
-            <div style={s.quickGrid}>
-              {GROCERY_STAPLES.map(item => (
-                <button key={item} style={s.quickBtn} onClick={() => addGrocery(item)}>{item}</button>
-              ))}
-            </div>
-          </div>
-          {grocery.length > 0 && (
-            <div style={s.section}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-                <div style={s.sectionLabel}>Your list ({grocery.filter(g => !g.done).length} left)</div>
-                {grocery.some(g => g.done) && (
-                  <button onClick={() => setGrocery(prev => prev.filter(g => !g.done))} style={{ background: "none", border: "none", color: "#555", fontSize: 12, cursor: "pointer" }}>
-                    Clear checked
-                  </button>
+                  })
                 )}
               </div>
-              {grocery.filter(g => !g.done).map(g => (
-                <div key={g.id} style={s.groceryItem}>
-                  <button onClick={() => toggleGrocery(g.id)} style={{ background: "none", border: "1px solid #333", borderRadius: "50%", width: 22, height: 22, cursor: "pointer", color: "#555", flexShrink: 0 }}>○</button>
-                  <div style={{ flex: 1, fontSize: 14 }}>{g.name}</div>
-                  <button onClick={() => deleteGrocery(g.id)} style={{ background: "none", border: "none", color: "#333", cursor: "pointer" }}>✕</button>
+            )}
+          </div>
+        )}
+
+        {/* GROCERIES */}
+        {tab === "grocery" && (
+          <div>
+            <button onClick={generateGroceryList} disabled={groceryGenerating} style={{ width: "100%", padding: "14px", borderRadius: 16, border: "none", cursor: groceryGenerating ? "not-allowed" : "pointer", fontSize: 14, fontWeight: 700, background: groceryGenerating ? C.borderSoft : C.accent, color: groceryGenerating ? C.textDim : "#fff", marginBottom: 16, boxShadow: C.shadowSm }}>
+              {groceryGenerating ? "Generating your list..." : "✦ Generate my grocery list"}
+            </button>
+            <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
+              <input
+                style={{ flex: 1, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: "10px 14px", color: C.text, fontSize: 13, outline: "none" }}
+                value={groceryInput}
+                onChange={e => setGroceryInput(e.target.value)}
+                onKeyDown={e => e.key === "Enter" && addGrocery(groceryInput)}
+                placeholder="Add an item..."
+              />
+              <button onClick={() => addGrocery(groceryInput)} style={{ background: C.accent, border: "none", borderRadius: 12, padding: "10px 18px", color: "#fff", fontWeight: 700, fontSize: 16, cursor: "pointer" }}>+</button>
+            </div>
+            <div style={{ marginBottom: 20 }}>
+              <div style={{ fontSize: 11, color: C.textDim, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 10 }}>Quick add</div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                {GROCERY_STAPLES.map(item => (
+                  <button key={item} onClick={() => addGrocery(item)} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 20, padding: "6px 14px", color: C.textSub, fontSize: 12, cursor: "pointer" }}>{item}</button>
+                ))}
+              </div>
+            </div>
+            {grocery.length > 0 && (
+              <div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                  <div style={{ fontSize: 11, color: C.textDim, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>Your list ({grocery.filter(g => !g.done).length} left)</div>
+                  {grocery.some(g => g.done) && (
+                    <button onClick={() => setGrocery(prev => prev.filter(g => !g.done))} style={{ background: "none", border: "none", color: C.textDim, fontSize: 12, cursor: "pointer" }}>Clear checked</button>
+                  )}
                 </div>
-              ))}
-              {grocery.filter(g => g.done).map(g => (
-                <div key={g.id} style={{ ...s.groceryItem, opacity: 0.4 }}>
-                  <button onClick={() => toggleGrocery(g.id)} style={{ background: "#22c55e", border: "none", borderRadius: "50%", width: 22, height: 22, cursor: "pointer", color: "#fff", fontSize: 12, flexShrink: 0 }}>✓</button>
-                  <div style={{ flex: 1, fontSize: 14, textDecoration: "line-through", color: "#555" }}>{g.name}</div>
-                  <button onClick={() => deleteGrocery(g.id)} style={{ background: "none", border: "none", color: "#333", cursor: "pointer" }}>✕</button>
-                </div>
+                {grocery.filter(g => !g.done).map(g => (
+                  <div key={g.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "13px 16px", background: C.surface, borderRadius: 14, marginBottom: 6, boxShadow: C.shadowSm }}>
+                    <button onClick={() => toggleGrocery(g.id)} style={{ width: 22, height: 22, borderRadius: "50%", border: `1.5px solid ${C.border}`, background: "none", cursor: "pointer", flexShrink: 0 }} />
+                    <div style={{ flex: 1, fontSize: 14, color: C.text }}>{g.name}</div>
+                    <button onClick={() => deleteGrocery(g.id)} style={{ background: "none", border: "none", color: C.textDim, cursor: "pointer" }}>✕</button>
+                  </div>
+                ))}
+                {grocery.filter(g => g.done).map(g => (
+                  <div key={g.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "13px 16px", background: C.surface, borderRadius: 14, marginBottom: 6, opacity: 0.45 }}>
+                    <button onClick={() => toggleGrocery(g.id)} style={{ width: 22, height: 22, borderRadius: "50%", border: "none", background: C.green, cursor: "pointer", flexShrink: 0, color: "#fff", fontSize: 12 }}>✓</button>
+                    <div style={{ flex: 1, fontSize: 14, color: C.textDim, textDecoration: "line-through" }}>{g.name}</div>
+                    <button onClick={() => deleteGrocery(g.id)} style={{ background: "none", border: "none", color: C.textDim, cursor: "pointer" }}>✕</button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ASK AI */}
+        {tab === "ask" && (
+          <div>
+            <div style={{ fontSize: 14, color: C.textSub, marginBottom: 16, lineHeight: 1.5 }}>
+              Ask anything — what to eat, what to buy, how you're doing.
+            </div>
+            <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+              <input
+                style={{ flex: 1, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: "11px 14px", color: C.text, fontSize: 13, outline: "none" }}
+                value={aiPrompt}
+                onChange={e => setAiPrompt(e.target.value)}
+                onKeyDown={e => e.key === "Enter" && askClaude()}
+                placeholder="What should I eat for dinner?"
+              />
+              <button onClick={askClaude} style={{ background: C.accent, border: "none", borderRadius: 12, padding: "11px 18px", color: "#fff", fontWeight: 700, fontSize: 15, cursor: "pointer" }}>→</button>
+            </div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 16 }}>
+              {["What should I eat next?", "Easy dinner tonight?", "How am I doing today?", "Easy breakfast ideas"].map(q => (
+                <button key={q} onClick={() => setAiPrompt(q)} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 20, padding: "6px 14px", color: C.textSub, fontSize: 12, cursor: "pointer" }}>{q}</button>
               ))}
             </div>
-          )}
+            {aiLoading && <div style={{ color: C.textSub, fontSize: 14, padding: "12px 0" }}>Thinking...</div>}
+            {aiResponse && (
+              <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 18, padding: "16px 18px", boxShadow: C.shadowSm }}>
+                <div style={{ fontSize: 14, color: C.text, lineHeight: 1.65 }}>{aiResponse}</div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Toast */}
+      {toast && (
+        <div style={{ position: "fixed", bottom: 90, left: "50%", transform: "translateX(-50%)", background: C.surface, border: `1px solid ${C.border}`, borderRadius: 16, padding: "12px 20px", fontSize: 13, color: C.text, whiteSpace: "nowrap", zIndex: 100, boxShadow: C.shadow }}>
+          {toast}
         </div>
       )}
-
-      {tab === "ask" && (
-        <div>
-          <div style={{ fontSize: 14, color: "#888", marginBottom: 16 }}>
-            Ask anything — what to eat, what to buy, how you're doing.
-          </div>
-          <div style={s.inputRow}>
-            <input
-              style={s.input}
-              value={aiPrompt}
-              onChange={e => setAiPrompt(e.target.value)}
-              onKeyDown={e => e.key === "Enter" && askClaude()}
-              placeholder="What should I eat for dinner?"
-            />
-            <button style={s.addBtn} onClick={askClaude}>→</button>
-          </div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 16 }}>
-            {["What should I eat next?", "Easy dinner tonight?", "How am I doing today?", "Easy breakfast ideas"].map(q => (
-              <button key={q} style={s.quickBtn} onClick={() => setAiPrompt(q)}>{q}</button>
-            ))}
-          </div>
-          {aiLoading && <div style={{ color: "#a78bfa", fontSize: 14 }}>Thinking...</div>}
-          {aiResponse && (
-            <div style={s.aiBox}>
-              <div style={s.aiText}>{aiResponse}</div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {toast && <div style={s.toast}>{toast}</div>}
     </div>
   );
 }

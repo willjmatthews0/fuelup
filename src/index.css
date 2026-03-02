@@ -1,2 +1,2 @@
 * { margin: 0; padding: 0; box-sizing: border-box; }
-body { background: #0f0f13; }
+body { background: linear-gradient(180deg, #f3ece3 0%, #faf6f1 280px); background-color: #faf6f1; min-height: 100vh; }
